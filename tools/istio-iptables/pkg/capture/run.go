@@ -405,11 +405,23 @@ func (cfg *IptablesConfigurator) Run() error {
 			}
 		}
 
+		// Accept traffic from this UID
+		cfg.ruleBuilder.AppendRule(iptableslog.UndefinedCommand, constants.OUTPUT, constants.FILTER,
+			"-p", "tcp", "--dport", "15000", "-m", "owner", "--uid-owner", uid, "-j", constants.ACCEPT)
+
 		// Avoid infinite loops. Don't redirect Envoy traffic directly back to
 		// Envoy for non-loopback traffic.
 		cfg.ruleBuilder.AppendRule(iptableslog.UndefinedCommand, constants.ISTIOOUTPUT, constants.NAT,
 			"-m", "owner", "--uid-owner", uid, "-j", constants.RETURN)
 	}
+
+	// Accept traffic from Root to Admin
+	cfg.ruleBuilder.AppendRule(iptableslog.UndefinedCommand, constants.OUTPUT, constants.FILTER,
+		"-p", "tcp", "--dport", "15000", "-m", "owner", "--uid-owner", "0", "-j", constants.ACCEPT)
+
+	// Drop output traffic to the admin port (previously included via UID of the proxy)
+	cfg.ruleBuilder.AppendRule(iptableslog.UndefinedCommand, constants.OUTPUT, constants.FILTER,
+		"-p", "tcp", "--dport", "15000", "-j", "DROP")
 
 	for _, gid := range split(cfg.cfg.ProxyGID) {
 		// Redirect app calls back to itself via Envoy when using the service VIP
